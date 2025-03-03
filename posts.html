@@ -343,7 +343,31 @@
             postViewRendered.style.display = 'block';
             postViewSource.style.display = 'none';
         });
+
+        // Auto-login and load saved settings
+window.addEventListener('load', function() {
+    const githubToken = localStorage.getItem('githubToken');
+    const githubUsername = localStorage.getItem('githubUsername');
+    const githubRepo = localStorage.getItem('githubRepo');
+    
+    // Fill in the values (even if we hide the form, this is useful)
+    if (githubToken) document.getElementById('githubToken').value = githubToken;
+    if (githubUsername) document.getElementById('githubUsername').value = githubUsername;
+    if (githubRepo) document.getElementById('githubRepo').value = githubRepo;
+    
+    // If we have all necessary credentials
+    if (githubToken && githubUsername && githubRepo) {
+        // Hide the settings container
+        document.querySelector('.container').style.display = 'none';
         
+        // Enable and automatically click the load posts button
+        loadPostsBtn.disabled = false;
+        loadPosts(); // Auto-load posts
+    } else {
+        // If credentials are missing, show settings and disable load posts
+        loadPostsBtn.disabled = !githubToken || !githubUsername || !githubRepo;
+    }
+}); 
         sourceViewBtn.addEventListener('click', function() {
             sourceViewBtn.classList.add('active');
             renderedViewBtn.classList.remove('active');
