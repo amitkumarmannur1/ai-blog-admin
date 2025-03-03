@@ -6,15 +6,12 @@ tags: [""]
 categories: ["blog"]
 ---
 
-
-
 ## Audio Version
 
 This post is available as an audio recording on NotebookLM.
 [Listen now](https://notebooklm.google.com/notebook/d61ca2e0-9501-41bc-9302-802db6d42248/audio)
 
-
-I'd be happy to help you prepare for a Staff-level AI/ML engineering role! Let's create a structured learning path that takes you from fundamentals to advanced concepts, with a focus on telecom industry applications.
+i'd be happy to help you prepare for a Staff-level AI/ML engineering role! Let's create a structured learning path that takes you from fundamentals to advanced concepts, with a focus on telecom industry applications.
 AI/ML Learning Path for a Telecom Engineer
 Foundations (2-4 weeks)
 
