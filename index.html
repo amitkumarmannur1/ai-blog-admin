@@ -55,6 +55,15 @@
             background-color: #cccccc;
             cursor: not-allowed;
         }
+        .small-button {
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+        .medium-button {
+            padding: 8px 12px;
+            font-size: 15px;
+            margin-right: 10px;
+        }
         .status {
             margin-top: 20px;
             padding: 15px;
@@ -102,6 +111,7 @@
         <div class="tab active" data-tab="setup">Setup</div>
         <div class="tab" data-tab="manual">Manual Content</div>
         <div class="tab" data-tab="ai">AI Content</div>
+        <div class="tab" data-tab="claude-embed">Claude Embed</div>
     </div>
     
     <div id="setup-tab" class="tab-content active">
@@ -173,7 +183,55 @@
         </div>
     </div>
     
+    <div id="claude-embed-tab" class="tab-content">
+        <div class="container">
+            <h2>Claude Embed</h2>
+            <p>Interact with Claude directly and use the generated content for your blog.</p>
+            
+            <div class="form-group">
+                <label for="embedApiKey">Claude Embed API Key:</label>
+                <input type="password" id="embedApiKey" placeholder="Your Claude Embed API Key">
+                <button id="saveEmbedKey" class="small-button">Save Key</button>
+            </div>
+            
+            <div class="form-group">
+                <label for="embedPrompt">Quick Prompt Templates:</label>
+                <select id="embedPrompt">
+                    <option value="">Select a template...</option>
+                    <option value="Write a blog post about [TOPIC]. Format it in Markdown with headers, subheaders, and proper formatting. Make it engaging, informative, and about 1000-1500 words.">Blog Post</option>
+                    <option value="Write a technical tutorial about [TOPIC]. Include code examples, step-by-step instructions, and explain concepts clearly. Format it in Markdown.">Technical Tutorial</option>
+                    <option value="Create a listicle about [TOPIC] with 5-10 items. For each item, provide a heading, description, and explanation of why it's important. Format in Markdown.">Listicle</option>
+                    <option value="Write a deep dive analysis of [TOPIC]. Explore the history, current state, challenges, and future trends. Format in Markdown with appropriate sections.">Deep Dive Analysis</option>
+                </select>
+                <button id="sendPrompt" class="small-button">Send to Claude</button>
+            </div>
+            
+            <div id="claude-embed-container" style="min-height: 500px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 20px;"></div>
+            
+            <div class="form-group">
+                <button id="copyContent" class="medium-button">Copy Content</button>
+                <button id="createPostFromEmbed" class="medium-button">Create Post from Content</button>
+            </div>
+            
+            <div id="embed-post-form" style="display: none; margin-top: 20px;">
+                <h3>Create Post from Claude Content</h3>
+                <div class="form-group">
+                    <label for="embedTitle">Post Title:</label>
+                    <input type="text" id="embedTitle" required placeholder="Title for your post">
+                </div>
+                <div class="form-group">
+                    <label for="embedTags">Tags (comma-separated):</label>
+                    <input type="text" id="embedTags" placeholder="claude-embed, topic1, topic2">
+                </div>
+                <button id="publishEmbedContent" class="medium-button">Publish Post</button>
+            </div>
+        </div>
+    </div>
+    
     <div id="status" class="status" style="display: none;"></div>
+    
+    <!-- Claude Embed Script -->
+    <script src="https://embed.anthropic.com/claude-embed.js"></script>
     
     <script>
         // Tab functionality
@@ -186,6 +244,11 @@
                 // Add active class to clicked tab and corresponding content
                 tab.classList.add('active');
                 document.getElementById(`${tab.dataset.tab}-tab`).classList.add('active');
+                
+                // Initialize Claude Embed when that tab is activated
+                if (tab.dataset.tab === 'claude-embed') {
+                    initializeClaudeEmbed();
+                }
             });
         });
         
@@ -431,13 +494,177 @@ ${aiContent}`;
             }
         }
         
+        // Claude Embed functionality
+        let claudeEmbed;
+        let embedContent = '';
+        
+        function initializeClaudeEmbed() {
+            const embedApiKey = localStorage.getItem('embedApiKey');
+            if (!embedApiKey) {
+                showStatus('Please save your Claude Embed API Key first', 'error');
+                return;
+            }
+            
+            try {
+                // Initialize Claude Embed
+                claudeEmbed = AnthropicEmbed.initialize({
+                    apiKey: embedApiKey,
+                    element: document.getElementById('claude-embed-container'),
+                    theme: 'light',
+                    initialMessages: [
+                        {
+                            role: 'assistant',
+                            content: "Hello! I'm Claude. I can help you create content for your blog. Ask me to write a post on any topic, and I'll format it in Markdown ready for your blog."
+                        }
+                    ]
+                });
+                
+                // Add message listener to capture content
+                claudeEmbed.on('message', (message) => {
+                    if (message.role === 'assistant') {
+                        embedContent = message.content;
+                    }
+                });
+            } catch (error) {
+                showStatus(`Error initializing Claude Embed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Save Claude Embed API Key
+        document.getElementById('saveEmbedKey').addEventListener('click', () => {
+            const embedApiKey = document.getElementById('embedApiKey').value;
+            if (embedApiKey) {
+                localStorage.setItem('embedApiKey', embedApiKey);
+                showStatus('Claude Embed API Key saved', 'success');
+                initializeClaudeEmbed();
+            } else {
+                showStatus('Please enter a valid API Key', 'error');
+            }
+        });
+        
+        // Send template prompt to Claude
+        document.getElementById('sendPrompt').addEventListener('click', () => {
+            const promptTemplate = document.getElementById('embedPrompt').value;
+            if (!promptTemplate) {
+                showStatus('Please select a prompt template', 'error');
+                return;
+            }
+            
+            if (!claudeEmbed) {
+                showStatus('Claude Embed is not initialized. Please save your API Key first', 'error');
+                return;
+            }
+            
+            // Prompt user for topic
+            const topic = prompt('Enter the topic for this content:');
+            if (!topic) return;
+            
+            // Replace placeholder and send to Claude
+            const finalPrompt = promptTemplate.replace('[TOPIC]', topic);
+            claudeEmbed.sendMessage({
+                role: 'user',
+                content: finalPrompt
+            });
+        });
+        
+        // Copy content button
+        document.getElementById('copyContent').addEventListener('click', () => {
+            if (!embedContent) {
+                showStatus('No content available to copy', 'error');
+                return;
+            }
+            
+            navigator.clipboard.writeText(embedContent)
+                .then(() => showStatus('Content copied to clipboard', 'success'))
+                .catch(err => showStatus(`Error copying content: ${err}`, 'error'));
+        });
+        
+        // Create post from embed content
+        document.getElementById('createPostFromEmbed').addEventListener('click', () => {
+            if (!embedContent) {
+                showStatus('No content available. Please generate content with Claude first', 'error');
+                return;
+            }
+            
+            // Show the post form
+            document.getElementById('embed-post-form').style.display = 'block';
+            // Scroll to form
+            document.getElementById('embed-post-form').scrollIntoView({ behavior: 'smooth' });
+        });
+        
+        // Publish embed content
+        document.getElementById('publishEmbedContent').addEventListener('click', async () => {
+            const title = document.getElementById('embedTitle').value;
+            const tags = document.getElementById('embedTags').value.split(',').map(tag => tag.trim());
+            
+            if (!title) {
+                showStatus('Please enter a title for your post', 'error');
+                return;
+            }
+            
+            // Get GitHub config
+            const githubToken = localStorage.getItem('githubToken');
+            const githubUsername = localStorage.getItem('githubUsername');
+            const githubRepo = localStorage.getItem('githubRepo');
+            
+            if (!githubToken || !githubUsername || !githubRepo) {
+                showStatus('Please configure your GitHub settings in the Setup tab', 'error');
+                return;
+            }
+            
+            try {
+                showStatus('Publishing content...', 'info');
+                
+                // Create slug from title
+                const slug = title
+                    .toLowerCase()
+                    .replace(/[^\w\s]/g, '')
+                    .replace(/\s+/g, '-')
+                    .substring(0, 50);
+                
+                // Format as Hugo/Jekyll post
+                const date = new Date().toISOString().split('T')[0];
+                const formattedContent = `---
+title: "${title}"
+date: ${date}
+draft: false
+tags: [${tags.map(tag => `"${tag}"`).join(', ')}]
+categories: ["claude-embed"]
+---
+
+${embedContent}`;
+                
+                // Create file path
+                const filePath = `content/posts/${date}-${slug}.md`;
+                
+                // Commit to GitHub
+                await createOrUpdateFile(
+                    githubUsername,
+                    githubRepo,
+                    filePath,
+                    `Add Claude Embed post: ${title}`,
+                    formattedContent,
+                    githubToken
+                );
+                
+                showStatus(`Content published successfully! It will be available shortly at: https://${githubUsername}.github.io/${githubRepo}/posts/${slug}/`, 'success');
+                document.getElementById('embedTitle').value = '';
+                document.getElementById('embedTags').value = '';
+                document.getElementById('embed-post-form').style.display = 'none';
+            } catch (error) {
+                showStatus(`Error: ${error.message}`, 'error');
+            }
+        });
+
         // Load saved config values on page load
         window.addEventListener('load', () => {
             const githubUsername = localStorage.getItem('githubUsername');
             const githubRepo = localStorage.getItem('githubRepo');
+            const embedApiKey = localStorage.getItem('embedApiKey');
             
             if (githubUsername) document.getElementById('githubUsername').value = githubUsername;
             if (githubRepo) document.getElementById('githubRepo').value = githubRepo;
+            if (embedApiKey) document.getElementById('embedApiKey').value = embedApiKey;
         });
     </script>
 </body>
