@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blog Post Manager</title>
+    <!-- Add Marked.js for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -116,6 +118,89 @@
             align-items: center;
             margin-bottom: 20px;
         }
+        /* Blog post styling */
+        .blog-content {
+            line-height: 1.7;
+            color: #333;
+        }
+        .blog-content h1 {
+            font-size: 2em;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 0.3em;
+            margin-top: 1.5em;
+        }
+        .blog-content h2 {
+            font-size: 1.5em;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 0.3em;
+            margin-top: 1.5em;
+        }
+        .blog-content h3 {
+            font-size: 1.25em;
+            margin-top: 1.5em;
+        }
+        .blog-content p {
+            margin: 1em 0;
+        }
+        .blog-content pre {
+            background-color: #f6f8fa;
+            border-radius: 3px;
+            padding: 16px;
+            overflow: auto;
+        }
+        .blog-content code {
+            background-color: #f6f8fa;
+            border-radius: 3px;
+            padding: 0.2em 0.4em;
+            font-family: monospace;
+        }
+        .blog-content blockquote {
+            margin: 1em 0;
+            border-left: 4px solid #ddd;
+            padding: 0 1em;
+            color: #666;
+        }
+        .blog-content ul, .blog-content ol {
+            margin: 1em 0;
+            padding-left: 2em;
+        }
+        .blog-content img {
+            max-width: 100%;
+            margin: 1em 0;
+        }
+        .blog-content a {
+            color: #0366d6;
+            text-decoration: none;
+        }
+        .blog-content a:hover {
+            text-decoration: underline;
+        }
+        .blog-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1em 0;
+        }
+        .blog-content table th, .blog-content table td {
+            padding: 8px;
+            border: 1px solid #ddd;
+        }
+        .blog-content table th {
+            background-color: #f2f2f2;
+            text-align: left;
+        }
+        .view-toggle {
+            display: flex;
+            margin-bottom: 15px;
+        }
+        .view-toggle button {
+            background-color: #f2f2f2;
+            color: #333;
+            border: 1px solid #ddd;
+        }
+        .view-toggle button.active {
+            background-color: #4CAF50;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -170,10 +255,23 @@
             <span id="post-view-date"></span> • 
             <span id="post-view-tags"></span>
         </div>
-        <div id="post-view-content" style="white-space: pre-wrap; font-family: monospace; border: 1px solid #ddd; padding: 15px; border-radius: 4px; margin-bottom: 20px;"></div>
+        
+        <div class="view-toggle">
+            <button id="rendered-view-btn" class="active">Rendered</button>
+            <button id="source-view-btn">Source</button>
+        </div>
+        
+        <div id="post-view-rendered" class="blog-content"></div>
+        <div id="post-view-source" style="white-space: pre-wrap; font-family: monospace; border: 1px solid #ddd; padding: 15px; border-radius: 4px; margin-bottom: 20px; display:none;"></div>
+        
         <button id="post-view-back">Back to List</button>
         <button id="post-view-edit">Edit Post</button>
         <button id="post-view-delete" style="background-color: #dc3545;">Delete Post</button>
+        
+        <div style="margin-top: 20px;">
+            <h3>Public URL</h3>
+            <div id="post-public-url" style="font-family: monospace;"></div>
+        </div>
     </div>
     
     <div id="post-edit" class="container" style="display:none;">
@@ -190,8 +288,15 @@
             <label for="edit-content">Content:</label>
             <textarea id="edit-content"></textarea>
         </div>
-        <button id="update-post">Update Post</button>
-        <button id="cancel-edit">Cancel</button>
+        <div style="display: flex; justify-content: space-between;">
+            <div>
+                <button id="update-post">Update Post</button>
+                <button id="cancel-edit">Cancel</button>
+            </div>
+            <button id="preview-edit">Preview</button>
+        </div>
+        
+        <div id="edit-preview" class="blog-content" style="display:none; margin-top: 20px; border-top: 1px solid #ddd; padding-top: 20px;"></div>
     </div>
     
     <div id="status-message" class="status"></div>
@@ -201,6 +306,7 @@
         let currentPosts = [];
         let currentPostPath = '';
         let currentPostSha = '';
+        let currentPostSlug = '';
         
         // DOM Elements
         const saveConfigBtn = document.getElementById('saveConfig');
@@ -212,17 +318,46 @@
         const postViewTitle = document.getElementById('post-view-title');
         const postViewDate = document.getElementById('post-view-date');
         const postViewTags = document.getElementById('post-view-tags');
-        const postViewContent = document.getElementById('post-view-content');
+        const postViewRendered = document.getElementById('post-view-rendered');
+        const postViewSource = document.getElementById('post-view-source');
+        const renderedViewBtn = document.getElementById('rendered-view-btn');
+        const sourceViewBtn = document.getElementById('source-view-btn');
         const postViewBack = document.getElementById('post-view-back');
         const postViewEdit = document.getElementById('post-view-edit');
         const postViewDelete = document.getElementById('post-view-delete');
+        const postPublicUrl = document.getElementById('post-public-url');
         const postEdit = document.getElementById('post-edit');
         const editTitle = document.getElementById('edit-title');
         const editTags = document.getElementById('edit-tags');
         const editContent = document.getElementById('edit-content');
+        const previewEdit = document.getElementById('preview-edit');
+        const editPreview = document.getElementById('edit-preview');
         const updatePostBtn = document.getElementById('update-post');
         const cancelEditBtn = document.getElementById('cancel-edit');
         const statusMessage = document.getElementById('status-message');
+        
+        // View toggle
+        renderedViewBtn.addEventListener('click', function() {
+            renderedViewBtn.classList.add('active');
+            sourceViewBtn.classList.remove('active');
+            postViewRendered.style.display = 'block';
+            postViewSource.style.display = 'none';
+        });
+        
+        sourceViewBtn.addEventListener('click', function() {
+            sourceViewBtn.classList.add('active');
+            renderedViewBtn.classList.remove('active');
+            postViewSource.style.display = 'block';
+            postViewRendered.style.display = 'none';
+        });
+        
+        // Preview button
+        previewEdit.addEventListener('click', function() {
+            const content = editContent.value;
+            editPreview.innerHTML = marked.parse(content);
+            editPreview.style.display = 'block';
+            editPreview.scrollIntoView({ behavior: 'smooth' });
+        });
         
         // Load saved settings
         window.addEventListener('load', function() {
@@ -317,6 +452,11 @@
                     const title = titleMatch ? titleMatch[1] : 'Untitled';
                     const date = dateMatch ? dateMatch[1].trim() : 'No date';
                     
+                    // Extract slug from filename
+                    const filenameParts = file.name.split('-');
+                    const datePrefix = filenameParts.slice(0, 3).join('-');
+                    const slug = file.name.replace(`${datePrefix}-`, '').replace('.md', '');
+                    
                     // Store post data
                     currentPosts.push({
                         path: file.path,
@@ -325,7 +465,8 @@
                         sha: file.sha,
                         title,
                         date,
-                        content
+                        content,
+                        slug
                     });
                     
                     // Create table row
@@ -400,16 +541,32 @@
             postViewTitle.textContent = post.title;
             postViewDate.textContent = post.date;
             postViewTags.textContent = tags;
-            postViewContent.textContent = contentWithoutFrontmatter;
+            
+            // Render markdown
+            postViewRendered.innerHTML = marked.parse(contentWithoutFrontmatter);
+            postViewSource.textContent = contentWithoutFrontmatter;
+            
+            // Set public URL
+            const githubUsername = localStorage.getItem('githubUsername');
+            const githubRepo = localStorage.getItem('githubRepo');
+            
+            // Try to determine the URL pattern - this might need adjustment
+            const urlBase = `https://${githubUsername}.github.io/${githubRepo}`;
+            const publicUrl = `${urlBase}/posts/${post.slug}/`;
+            postPublicUrl.innerHTML = `<a href="${publicUrl}" target="_blank">${publicUrl}</a>`;
             
             // Store current post path and sha for edit/delete
             currentPostPath = post.path;
             currentPostSha = post.sha;
+            currentPostSlug = post.slug;
             
             // Show view, hide other sections
             postView.style.display = 'block';
             postsSection.style.display = 'none';
             postEdit.style.display = 'none';
+            
+            // Default to rendered view
+            renderedViewBtn.click();
             
             // Set up back button
             postViewBack.onclick = function() {
@@ -449,6 +606,9 @@
             editTitle.value = post.title;
             editTags.value = tags;
             editContent.value = contentWithoutFrontmatter;
+            
+            // Hide preview
+            editPreview.style.display = 'none';
             
             // Store current post path and sha
             currentPostPath = post.path;
@@ -493,10 +653,9 @@
                 showStatus('Updating post...', 'info');
                 
                 // Format as Hugo/Jekyll post
-                const date = new Date().toISOString().split('T')[0];
                 const formattedContent = `---
 title: "${title}"
-date: ${date}
+date: ${new Date().toISOString().split('T')[0]}
 draft: false
 tags: [${tags}]
 categories: ["blog"]
